@@ -17,6 +17,7 @@ import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.util.Log;
@@ -25,7 +26,9 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import java.io.Closeable;
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -64,11 +67,13 @@ public class MainActivity extends AppCompatActivity {
 
             Bitmap mBitmap = null;
             try {
-                Toast.makeText(this,"original size "+getImageLength(getRealPathFromURI(this,uri)),Toast.LENGTH_SHORT).show();
+                String actualUri = getPathFromGooglePhotosUri(uri);
+                Log.d(TAG, "onActivityResult:actualUri:" + actualUri);
+                Toast.makeText(this, "original size " + getImageLength(actualUri), Toast.LENGTH_SHORT).show();
                 mBitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), uri);
                 actualImageView.setImageBitmap(mBitmap);
-            } catch (Exception e) {
-                Toast.makeText(this, "error in loading", Toast.LENGTH_SHORT).show();
+            }catch (Exception e){
+                e.printStackTrace();
             }
         }
     }
@@ -88,7 +93,7 @@ public class MainActivity extends AppCompatActivity {
 
     public String compressImage(Uri imageUri) {
 
-        String filePath = getRealPathFromURI(this,imageUri);
+        String filePath = getPathFromGooglePhotosUri(imageUri);
         Log.d(TAG, "compressImage: "+filePath);
         Bitmap scaledBitmap = null;
 
@@ -237,29 +242,73 @@ public class MainActivity extends AppCompatActivity {
         return inSampleSize;
     }
 
-    public static String getRealPathFromURI(Context context, Uri uri){
-        String filePath = "";
-        String wholeID = DocumentsContract.getDocumentId(uri);
+//    public static String getRealPathFromURI(Context context, Uri uri){
+//        String filePath = "";
+//        String wholeID = DocumentsContract.getDocumentId(uri);
+//
+//        // Split at colon, use second item in the array
+//        String id = wholeID.split(":")[1];
+//
+//        String[] column = { MediaStore.Images.Media.DATA };
+//
+//        // where id is equal to
+//        String sel = MediaStore.Images.Media._ID + "=?";
+//
+//        Cursor cursor = context.getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+//                column, sel, new String[]{ id }, null);
+//
+//        int columnIndex = cursor.getColumnIndex(column[0]);
+//
+//        if (cursor.moveToFirst()) {
+//            filePath = cursor.getString(columnIndex);
+//        }
+//        cursor.close();
+//        return filePath;
+//    }
 
-        // Split at colon, use second item in the array
-        String id = wholeID.split(":")[1];
+    public String getPathFromGooglePhotosUri(Uri uriPhoto) {
+        if (uriPhoto == null)
+            return null;
 
-        String[] column = { MediaStore.Images.Media.DATA };
+        FileInputStream input = null;
+        FileOutputStream output = null;
+        try {
+            ParcelFileDescriptor pfd = getContentResolver().openFileDescriptor(uriPhoto, "r");
+            FileDescriptor fd = pfd.getFileDescriptor();
+            input = new FileInputStream(fd);
 
-        // where id is equal to
-        String sel = MediaStore.Images.Media._ID + "=?";
+            String tempFilename = getTempFilename(this);
+            output = new FileOutputStream(tempFilename);
 
-        Cursor cursor = context.getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                column, sel, new String[]{ id }, null);
-
-        int columnIndex = cursor.getColumnIndex(column[0]);
-
-        if (cursor.moveToFirst()) {
-            filePath = cursor.getString(columnIndex);
+            int read;
+            byte[] bytes = new byte[4096];
+            while ((read = input.read(bytes)) != -1) {
+                output.write(bytes, 0, read);
+            }
+            return tempFilename;
+        } catch (IOException ignored) {
+            // Nothing we can do
+        } finally {
+            closeSilently(input);
+            closeSilently(output);
         }
-        cursor.close();
-        Log.d(TAG, "getRealPathFromURI:"+filePath);
-        return filePath;
+        return null;
+    }
+
+    public static void closeSilently(Closeable c) {
+        if (c == null)
+            return;
+        try {
+            c.close();
+        } catch (Throwable t) {
+            // Do nothing
+        }
+    }
+
+    private static String getTempFilename(Context context) throws IOException {
+        File outputDir = context.getCacheDir();
+        File outputFile = File.createTempFile("image", "tmp", outputDir);
+        return outputFile.getAbsolutePath();
     }
 
     public long getImageLength(String absFileName) {
