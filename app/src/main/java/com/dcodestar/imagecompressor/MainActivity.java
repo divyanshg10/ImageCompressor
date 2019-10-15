@@ -69,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 String actualUri = getPathFromGooglePhotosUri(uri);
                 Log.d(TAG, "onActivityResult:actualUri:" + actualUri);
-                Toast.makeText(this, "original size " + getImageLength(actualUri), Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "original size " + getImageLength(actualUri)/(1024*1024)+" MB ", Toast.LENGTH_LONG).show();
                 mBitmap = MediaStore.Images.Media.getBitmap(this.getContentResolver(), uri);
                 actualImageView.setImageBitmap(mBitmap);
             }catch (Exception e){
@@ -81,7 +81,7 @@ public class MainActivity extends AppCompatActivity {
     public void startCompressing(View view) {
         String compresseduri = compressImage(uri);
         try {
-            Toast.makeText(this,"compressed size in bytes"+getImageLength(compresseduri),Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,"compressed size in bytes"+getImageLength(compresseduri)/1024 +" KB ",Toast.LENGTH_LONG).show();
             File imgFile=new File(compresseduri);
             if(imgFile.exists()) {
                 Bitmap bitmap = BitmapFactory.decodeFile(imgFile.getAbsolutePath());
@@ -164,11 +164,14 @@ public class MainActivity extends AppCompatActivity {
 
         Matrix scaleMatrix = new Matrix();
         scaleMatrix.setScale(ratioX, ratioY, middleX, middleY);
-
-        Canvas canvas = new Canvas(scaledBitmap);
-        canvas.setMatrix(scaleMatrix);
-        canvas.drawBitmap(bmp, middleX - bmp.getWidth() / 2, middleY - bmp.getHeight() / 2, new Paint(Paint.FILTER_BITMAP_FLAG));
-
+        try {
+            Canvas canvas = new Canvas(scaledBitmap);
+            canvas.setMatrix(scaleMatrix);
+            canvas.drawBitmap(bmp, middleX - bmp.getWidth() / 2, middleY - bmp.getHeight() / 2, new Paint(Paint.FILTER_BITMAP_FLAG));
+        } catch (Exception e) {
+            Toast.makeText(this,"Image Size Too Large",Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        }
 //      check the rotation of the image and display it properly
         ExifInterface exif;
         try {
